@@ -1,0 +1,553 @@
+\documentclass{article}
+
+\usepackage{ulem}
+\usepackage{listings}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage[normalem]{ulem}
+\useunder{\uline}{\ul}{}
+
+\input{setup}
+
+\begin{document}
+
+\CAPA{Simulando o sistema de mémoria cache}{BCC266 - Organização de Computadores}{Maria Clara Silva Perpetuo\\Leandro Augusto Ferreira Santos}{Pedro Henrique Lopes Silva}
+
+
+\section{Introdução}
+\\
+
+Este trabalho, desenvolvido através da linguagem de programação "C", tem como objetivo simular um computador e seu sistema de memória, particulamente com o sistema cache. Para tanto, foi implementado um novo 
+ nível de memória cache. O mapeamento associativo ou/e o mapeamento associativo em conjunto para a troca de linhas entre cache e a memória principal (RAM) é a pauta do projeto. 
+
+\subsection{Especificações do problema}
+
+Neste trabalho prático, foi necessário implementar a simulação de um sistema de memória hiérarquico com memória principal(RAM) e várias camadas de memória cache(L1, L2, L3). A memória principal é dividida em blocos e cada memória cache é dividida em linhas.
+\\ \\
+Além disso, foi preciso implementar pelo menos duas políticas de substituição de linhas de cache. Nesse trabalho foi utilizado 'LFU'(Least Frequent Used) e 'LRU'(Least Recently Used). 
+
+\subsection{Considerações iniciais}
+
+Algumas ferramentas foram utilizadas durante a criação deste projeto:
+
+\begin{itemize}
+  \item Ambiente de desenvolvimento do código fonte: VSCode; \footnote{VSCode está disponível em \url{https://code.visualstudio.com}}
+  \item Linguagem utilizada: C.
+  \item Ambiente de desenvolvimento da documentação: Overleaf \LaTeX. \footnote{Disponível em \url{https://www.overleaf.com/}}
+\end{itemize}
+
+\subsection{Ferramentas utilizadas}
+Algumas ferramentas foram utilizadas para testar a implementação, como:
+\begin{itemize}
+    \item[-] \textit{CLANG}: ferramentas de análise estática do código.
+    \item[-] \textit{Valgrind}: ferramentas de análise dinâmica do código.
+\end{itemize}
+
+\subsection{Especificações da máquina}
+A máquina onde o desenvolvimento e os testes foram realizados possui a seguinte configuração:
+\begin{itemize}
+    \item[-] Processador: Intel Core i3 10110u;
+    \item[-] Memória RAM: 8Gb;
+    \item[-] Sistema Operacional: Ubuntu;
+\end{itemize}
+
+\subsection{Instruções de compilação e execução}
+
+Para a compilação do projeto, basta digitar:
+
+\begin{tcolorbox}[title=Compilando o projeto,width=\linewidth]
+    gcc -c cpu.c -Wall
+    \\ gcc -c generator.c -Wall
+    \\ gcc -c instruction.c -Wall
+    \\ gcc -c instructionGeneratorNotSoRandom.c -Wall
+    \\ gcc -c memory.c -Wall
+    \\ gcc -c mmu.c -Wall
+    \\ gcc -c main.c -Wall
+    \\ gcc cpu.o generator.o instruction.o  instructionGeneratorNotSoRandom.o memory.o mmu.o main.o -o exe
+\end{tcolorbox}
+
+\begin{tcolorbox}[title=Método mais prático,width=\linewidth]
+    make
+    \\Se possui makefile instalado
+\end{tcolorbox}
+
+Usou-se para compilar o código as seguintes opções:
+\begin{itemize}
+    \item [-] -g: para compilar com informação de depuração e ser usado pelo Valgrind.
+    \item [-] -Wall: para mostrar todos os possível \emph{warnings} do código.
+\end{itemize}
+
+Para executar o programa, basta digitar:
+\begin{tcolorbox}[title=,width=\linewidth]
+    ./exe Downloads/Source/ random 10 2 4 5
+\end{tcolorbox}
+
+Onde ''10'', ''2'', ''4'' e ''5'' podem ser substituidos por outras quantias, sendo esses, em ordem, o tamanho da RAM, e os valores inseridos nas linhas.
+\\ \\
+
+
+\clearpage
+\section{Desenvolvimento}
+
+\subsection{Considerações}
+\noindent\\
+A troca dos algorítimos de remoção da cache é dada a partir das funções 'define', contidos nos módulos .h do programa. Seguem, abaixo, as principais adaptações do programa:
+\begin{lstlisting}[caption={Exemplo de código LFU e LRU.},label={lst:cod1},language=C]
+// in constants.h:
+
+#define LFU
+
+in mmu.c:
+
+#ifdef LFU
+    // [LFU]
+    int menor = cache->lines[0].count;
+    for (int i = 1; i < cache->size; i++)
+    {
+        // confere count -> o número de acessos;
+        if (menor > cache->lines[i].count)
+        {
+            pos = i;
+            menor = cache->lines[i].count;
+        }
+        // retorna a posicao c/ o menor numero
+    }
+#endif
+
+#ifdef LRU
+    // [Least Recently Used]
+    for (int i = 0; i < cache->size; i++)
+    {
+        cache->lines[i].tempo_ac++;
+        // confere tempo_ac -> ha qto tempo a linha está sem ser acessada;
+        if (cache->lines[i].tempo_ac > cache->lines[pos].tempo_ac)
+        {
+            pos = i;
+        }
+        // retorna o maior tempo em pos;
+
+        if (cache->lines[i].tag == address)
+            return i;
+    }
+    cache->lines[pos].tempo_ac++;
+
+#endif
+\end{lstlisting}
+\subsection{Políticas de mapeamento}
+\\ Para esse trabalho, foi usado o mapeamento associativo simples, combinado à duas das três políticas de substituição de Cache mais conhecidas: LFU e LRU.\\
+\\LRU: A ideia principal da política ''LRU'' consiste em escolher como alvo a linha mais antiga em termos de utilização. Dessa maneira, foi acrescida à struct 'linhas' uma variável auxiliar, nomeada 'tempo-ac'. Essa variável fica responsável por verificar, através de um contador simples, quais são as linhas usadas recentemente, e qual delas é a mais antiga. Uma vez que, dado o acesso à uma linha qualquer, seu contador tempo-ac é zerado, um laço de repetição percorre toda a cache e retorna a linha de maior valor na variável em questão para a função chamadora.  
+
+\\LFU: A política ''LFU'', por sua vez, escolhe como alvo a linha menos usada em geral, durante a execução do programa. A implementação é dada através de uma outra variável 'int', acrescida à struct 'lines', a qual fica responsável por contar quantas vezes o bloco foi acessado, dentro da mmu.c e outros locais de acesso às linhas. Assim, para implementação da política, um laço de repetição percorre toda a cache e retorna a linha com menor contador.
+
+\\Ambas as políticas implementadas operam de maneira independente uma da outra. Assim, é definido no módulo ''constants.h'' qual delas será utilizada.
+
+\\ 
+\clearpage
+\subsection{Adição de uma terceira cache}
+Em primeiro momento, foi necessário adicionar uma terceira variável de cache no cpu, mais especificamente na struct que repreenta a máquinha:
+\begin{lstlisting}[caption={Exemplo de código para a struct máquina.},label={lst:cod1},language=C]
+Instruction *generateMultiInstructions(int multiplicando, int multiplicador)
+in cpu.h:
+
+typedef struct
+{
+    Instruction *instructions;
+    RAM ram;
+    Cache l1; // cache L1
+    Cache l2; // cache L2
+    Cache l3; // cache L3
+    int missL1, missL2, missL3;
+    int hitL1, hitL2, hitL3, hitRAM;
+    int totalCost;
+    
+} Machine;
+
+\end{lstlisting}
+\\
+Após isso, essa terceira cache foi inicializada no start da máquina e finalizada no stop máquina:
+\begin{lstlisting}[caption={Exemplo de código para as funções start e stop.},label={lst:cod1},language=C]
+void start(Machine *machine, Instruction *instructions, int *memoriesSize)
+{
+        // memoriesSize[0] = ramSize
+        startRAM(&machine->ram, memoriesSize[0]);
+        startCache(&machine->l1, memoriesSize[1]);
+        startCache(&machine->l2, memoriesSize[2]);
+        startCache(&machine->l3, memoriesSize[3]);
+
+        machine->instructions = instructions;
+
+        machine->hitL1 = 0;
+        machine->hitL2 = 0;
+        machine->hitL3 = 0;
+        machine->hitRAM = 0;
+
+        machine->missL1 = 0;
+        machine->missL2 = 0;
+        machine->missL3 = 0;
+        machine->totalCost = 0;
+}
+
+
+void stop(Machine *machine)
+{
+        free(machine->instructions);
+        stopRAM(&machine->ram);
+        stopCache(&machine->l1);
+        stopCache(&machine->l2);
+        stopCache(&machine->l3);
+}
+ 
+
+\end{lstlisting}
+Também foi necessário adicionar a terceira cache na função que imprime toda a memória, ainda na função cpu.c:
+\begin{lstlisting}[caption={Exemplo do código printMemories.},label={lst:cod1},language=C]
+
+void printMemories(Machine *machine)
+{
+        printf("\x1b[0;30;47m      ");
+        printc("RAM", WORDS_SIZE * 8 + 3);
+        printc("Cache L3", WORDS_SIZE * 8 + 10);
+        printc("Cache L2", WORDS_SIZE * 8 + 10);
+        printc("Cache L1", WORDS_SIZE * 8 + 10);
+        printf("\x1b[0m\n");
+        for (int i = 0; i < machine->ram.size; i++)
+        {
+                printf("\x1b[0;30;47m%6d|\x1b[0m", i);
+                for (int j = 0; j < WORDS_SIZE; j++)
+                        printf(" %6d |", machine->ram.blocks[i].words[j]);
+                if (i < machine->l3.size)
+                {
+                        printf("|");
+                        printcolored(machine->l3.lines[i].tag, machine->l3.lines[i].updated);
+                        for (int j = 0; j < WORDS_SIZE; j++)
+                                printf(" %6d |", machine->l3.lines[i].block.words[j]);
+
+                        if (i < machine->l2.size)
+                        {
+                                printf("|");
+                                printcolored(machine->l2.lines[i].tag, machine->l2.lines[i].updated);
+                                for (int j = 0; j < WORDS_SIZE; j++)
+                                        printf(" %6d |", machine->l2.lines[i].block.words[j]);
+                                if (i < machine->l1.size)
+                                {
+                                        printf("|");
+                                        printcolored(machine->l1.lines[i].tag, machine->l1.lines[i].updated);
+                                        for (int j = 0; j < WORDS_SIZE; j++)
+                                                printf(" %6d |", machine->l1.lines[i].block.words[j]);
+                                }
+                        }
+                }
+                printf("\n");
+        }
+}    
+\end{lstlisting}
+\\ A função acima é responsável pela impressão das memórias na tela. Foi acrescentada a representação da memória cache L3 ao código original, disponibilizado no .zip.
+\\Em mmu.c tambem foram feitas adaptações para a adição da terceira cache, no caso, isso foi feito de forma bem padronizada, basicamente repetindo o que ja tinha sido feito tanto com a primeira cache quanto com a segunda cache:
+\begin{lstlisting}[caption={Exemplo da função MMUSearchOnMemorys.},label={lst:cod1},language=C]
+
+Line *MMUSearchOnMemorys(Address add, Machine *machine, WhereWasHit *whereWasHit)
+{
+    int l1pos = memoryCacheMapping(add.block, &machine->l1);
+    int l2pos = memoryCacheMapping(add.block, &machine->l2);
+    int l3pos = memoryCacheMapping(add.block, &machine->l3);
+
+    Line *cache1 = machine->l1.lines;
+    Line *cache2 = machine->l2.lines;
+    Line *cache3 = machine->l3.lines;
+
+    MemoryBlock *RAM = machine->ram.blocks;
+    int cost = 0;
+
+    // [BLOCO NA L1]
+    if (cache1[l1pos].tag == add.block)
+    {
+        /* Block is in memory cache L1 */
+        cost = COST_ACCESS_L1;
+        *whereWasHit = L1Hit;
+        cache1[l1pos].tempo_ac = 0;
+    }
+
+    // [BLOCO NA L2]
+    else if (cache2[l2pos].tag == add.block)
+    {
+        /* Block is in memory cache L2 */
+        cache2[l2pos].tag = add.block;
+        cost = COST_ACCESS_L1 + COST_ACCESS_L2;
+        *whereWasHit = L2Hit;
+        {
+            // tinha um tmp aqui, mas não serviu p/ nada..
+
+            if (!canOnlyReplaceBlock(cache1[l1pos]))
+            {
+                if (!canOnlyReplaceBlock(cache2[l2pos]))
+                {
+                    cache3[l3pos] = cache2[l2pos];
+                }
+                else
+                {
+                    cache2[l2pos] = cache1[l1pos];
+                }
+                cache2[l2pos].tempo_ac = 0;
+                cache2[l2pos] = cache1[l1pos];
+            }
+        }
+        cache2[l2pos].tempo_ac = 0;
+    }
+
+    // [BLOCO NA L3]
+    else if (cache3[l3pos].tag == add.block)
+    {
+
+        cache3[l3pos].tag = add.block;
+
+        cost = COST_ACCESS_L1 + COST_ACCESS_L2 + COST_ACCESS_L3;
+        *whereWasHit = L3Hit;
+
+        // [SEÇÃO DE BACKUP]
+        if (!canOnlyReplaceBlock(cache1[l1pos]))
+        { // se nao puder substituir -> backup
+            if (!canOnlyReplaceBlock(cache2[l2pos]))
+            {
+                if (!canOnlyReplaceBlock(cache3[l3pos]))
+                {                                                 // se nao puder colocar em l3, joga p/ ram;
+                    RAM[cache3[l3pos].tag] = cache3[l3pos].block; // bloco diferente de linha, substituo so o bloco aq entao;
+                }
+                else
+                { // se puder colocar em l3, coloca;
+                    cache3[l3pos] = cache2[l2pos];
+                }
+                cache3[l3pos].tempo_ac = 0;    // acessou a linha l3pos p/ conferir se pode substituir;
+                cache3[l3pos] = cache2[l2pos]; // backup de l2 em l3;
+            }
+            else
+            { // se puder colocar em l2, coloca;
+                cache2[l2pos] = cache1[l1pos];
+            }
+            cache2[l2pos].tempo_ac = 0;    // acessou a linha l2pos p/ conferir se pode substituir;
+            cache2[l2pos] = cache1[l1pos]; // backup de l2 em l1;
+        }
+        cache1[l1pos].tempo_ac = 0; // acessou a linha l1pos p/ conferir se pode substituir, logo time = 0;
+
+        updateMachineInfos(machine, whereWasHit, cost);
+        return &(cache3[l3pos]); // achou entao ja retorna q ta em l3;
+    }
+
+    // [BLOCO NA RAM]
+    else
+    {
+        /* Block only in memory RAM, need to bring it to cache and manipulate the blocks */
+        int l2pos = lineWhichWillLeave(cache1[l1pos].tag, &machine->l2); /* Need to check the position of the block that will leave the L1 */
+        int l3pos = lineWhichWillLeave(cache1[l1pos].tag, &machine->l3);
+
+        if (!canOnlyReplaceBlock(cache1[l1pos]))
+        {
+            /* The block on cache L1 cannot only be replaced, the memories must be updated */
+            if (!canOnlyReplaceBlock(cache2[l2pos]))
+            {
+                /* The block on cache L2 cannot only be replaced, the memories must be updated */
+                if (!canOnlyReplaceBlock(cache3[l3pos]))
+                {
+                    // The block on cache L3 cannot only be replaced, the memories must be updated //
+                    RAM[cache3[l3pos].tag] = cache3[l3pos].block;
+                }
+                else
+                { // posso substituir l3
+                    cache3[l3pos] = cache2[l2pos];
+                }
+                cache3[l3pos].tempo_ac = 0;
+                cache3[l3pos] = cache2[l2pos];
+            }
+            else
+            {
+                cache2[l2pos] = cache1[l1pos];
+            }
+            cache2[l2pos] = cache1[l1pos]; // se entrar no if, tem q passar por esse estagio aqui ;
+            cache2[l2pos].tempo_ac = 0;
+        }
+        cache1[l1pos].tempo_ac = 0;
+
+        cache1[l1pos].block = RAM[add.block];
+        cache1[l1pos].tag = add.block;
+        cache1[l1pos].updated = false;
+        cost = COST_ACCESS_L1 + COST_ACCESS_L2 + COST_ACCESS_RAM;
+        *whereWasHit = RAMHit;
+        updateMachineInfos(machine, whereWasHit, cost);
+        return &(cache1[l1pos]);
+    }
+
+    return &(cache1[l1pos]);
+}
+\end{lstlisting}
+\\ A função acima recebe como parâmetro um endereço específico, gerado de maneira aleatória pela aba de instruções. O endereço em questão será operado por uma das operações da máquina, e a função 'mmuSearchOnMemories' fica responsável por sua busca. Assim, as quatro memórias são vasculhadas e, quando o endereço alvo é encontrado, é realizado o cálculo do custo do vasculho, a verificação se o bloco alvo pode ser substituído ou não e a atualização das novas informações na máquina.
+\\Outros ajustes adicionais também são feitos para manter o funcionamento correto da máquina.
+\clearpage
+\subsection{LRU} 
+\\ \\ 
+O código abaixo mostra o algorítimo LRU (Last Recently Used):
+\begin{lstlisting}[caption={Exemplo de código do algorítimo LRU.},label={lst:cod1},language=C]
+in constants.h:
+
+#define LFU
+
+in mmu.c:
+
+#ifdef LRU
+    // [Least Recently Used]
+    for (int i = 0; i < cache->size; i++)
+    {
+        cache->lines[i].tempo_ac++;
+        // confere tempo_ac -> ha qto tempo a linha está sem ser acessada;
+        if (cache->lines[i].tempo_ac > cache->lines[pos].tempo_ac)
+        {
+            pos = i;
+        }
+        // retorna o maior tempo em pos;
+
+        if (cache->lines[i].tag == address)
+            return i;
+    }
+    cache->lines[pos].tempo_ac++;
+
+#endif
+
+    return pos;
+}
+
+\end{lstlisting}
+\\
+\begin{enumerate}
+    \item O código começa com um 'ifdef LRU' indicando que esse código só será compilado se a macro 'LRU' estiver definida na constants.h.
+    \item O loop 'for' passa por todas as linhas de cache, de 0 até cache->size - 1, onde cache->size é o total de linhas na cache.
+    \item Para cada linha de cache, o 'tempoac'é imcrementado. Este representa o tempo passado desde que a linha foi acessada.
+    \item No loop, o código mantém a linha cache com o maior valor de 'tempoac' comparando o valor de tempo da linha atual com a linha na posição 'pos', posterior. Se o tempo da linha atual for maior que da linha na posição 'pos', o 'pos' é atualizado para a linha atual.
+    \item O loop continua até que todas as linhas da cache sejam examinadas.
+    \item Depois de encontrar a linha com maior 'tempoac', o código checa se a 'tag' da linha de cache combina com o endereço dado. Se uma linha cache que combine for achada, isso significa que uma informação correspondente ao endereço ja está presente na cache e retorna 'i'.
+    \item Se o loop não achar uma tag que combine, o código retorna 'pos'.
+\end{enumerate}
+\\ O propósito é substituir a cache menos usada recentemente(LRU) quando necessário.
+\clearpage
+\subsection{LFU}
+O código abaixo mostra o algorítimo LFU (Least Frequently Used)::\\
+\begin{lstlisting}[caption={Trecho de código referente a LFU},label={lst:cod1},language=C]
+in constants.h:
+
+#define LRU
+
+in mmu.c
+
+#ifdef LFU
+    // [LFU]
+    int menor = cache->lines[0].count;
+    for (int i = 1; i < cache->size; i++)
+    {
+        // confere count -> o número de acessos;
+        if (menor > cache->lines[i].count)
+        {
+            pos = i;
+            menor = cache->lines[i].count;
+        }
+        // retorna a posicao c/ o menor numero
+    }
+#endif
+
+\end{lstlisting}
+\\
+\begin{enumerate}
+    \item O código começa com um 'ifdef LFU' indicando que esse código só será compilado se a macro 'LFU' estiver definida na constants.h.
+    \item O algoritimo usa a variável 'menor' para definir o menor valor de 'count' em todas as linhas de cache na cache.
+    \item O loor 'for' passa por todas as linhas da cache.
+    \item Para cada linha cache, algoritimo compara o 'cont' com o atual valor de 'menor'. Contador representa o número de vezes que a linha cache foi acessada.
+    \item Se o contador da atual linha cache analizada for menor que 'menor', isso significa que atual foi menos acessada qur a 'menor'. Nesse caso, a 'pos' é atualizada e o valor de menor é atualizado para o atual.
+    \item O loop continua por todas as linhas da cache.
+    \item Depois que o loop for completo, a variável 'pos' vai armazenar o index da linha cache com o menor valor de contador.
+    \item O algorítimo vai retornar 'pos', valor pra trocar a linha cache com a usada menos frequentemente.
+\end{enumerate}
+
+\clearpage
+\section{Experimentos}
+
+Os testes foram realizados em computadores com os hardwares presentes na tabela abaixo, a medição de tempo de execução é apresentada a seguir:
+
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=1\textwidth]{hardware.png}
+    \caption{Especificações dos hardwares de teste}
+    \label{fig:frog}
+\end{figure}
+
+\subsection{Considerações}
+Por fim, os resultados obtidos são razoáveis. 
+
+\\Para todos os casos, nos reunimos para analisar o código base e, desse modo, entender a implementação proposta pelo enunciado, tais como operam as empresas para com seus funcionários. A solução das operações não foram as únicas implementadas, graças á dificuldade na implementação e interpretação do código.
+
+\\Adicionar uma terceira cache e fazé-la funcionar como as outras, foi um verdadeiro desafio. Usamos o código base como exemplo de implementação, mesmo assim, de ínicio, os resultados não foram bons como esperado. 
+
+\\Além disso, adaptar as contas implementadas no primeiro trabalho prático não foi fácil. Foi necessário corrigir alguns erros dos mesmos para que funcionassem no trabalho prático atual.
+
+\subsection{Tempo de Execução}
+Para medir o tempo de execução em cada hardware, foi usada a função ''clock()'', da biblioteca ''time.h''. O seguinte trecho de código foi adaptado à função main e, dessa maneira, o cálculo preciso do tempo de execução do código foi retornado.
+\begin{lstlisting}[caption={Exemplo de código para a operação de divisão.},label={lst:cod1},language=C]
+int main() {
+    clock_t inicio, fim;
+    double tempo_decorrido;
+
+    // [CAPTURA DO TEMPO ATUAL NO INÍCIO DO PROGRAMA]
+    inicio = clock();
+
+    // [CAPTURA DO TEMPO ATUAL AO FIM DAS EXECUÇÕES DAS FUNÇÕES]
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+    
+    printf("Tempo de execucao: %fs\n", tempo_decorrido);
+
+    return 0;
+}
+\end{lstlisting}
+
+\clearpage
+As variáveis 'inicio' e 'fim' são do tipo clock-t. Servem para capturar o tempo de execução do programa com precisão de milissegundos no momento em que são chamadas. Dessa forma, a variável 'inicio' é chamada logo após a declaração das variáveis, e a variável 'fim' antes do retorno final do método principal. Assim, o tempo médio de execução para cada hardware é retornado.\\ \\
+\\A seguir, os gráficos com o tempo estimado para ambos os hardwares:
+
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=1\textwidth]{tempo-exec.jpeg}
+    \caption{Tempo estimado médio de execução nas CPU's 1 e 2.}
+    \label{fig:frog}
+\end{figure}
+
+\clearpage
+\section{Calculo de complexidade}
+
+É importante ressaltar que a análise de complexidade nesse código depende de qual caso foi usado e o número de instruçoẽe executados durante a simulação. Para cada instrução excecutada, vai haver chacagem da cache, acesso de memória, e possível mudança de cache, que variam baseados no tamanho da hierarquia de memória e nos padrões de acesso específicos.
+
+\\
+No geral, podemos analisar a complexidade das funções da main:
+
+\begin{enumerate}
+    \item 'executeInstruction': Depende do número de instruções do programa. No pior caso, a complexidade seria O(n), onde n é o número de instruções.
+    \item 'run': Essa função executa as instruções em um loop usando a 'executeInstruction'. Como mencionado, a complexidade é O(n) baseado no número de instruções.
+    \item 'printMemories': Essa função imprime a hierarquia de memória e seu conteúdo. A complexidade é O(n) onde n é o número de blocos na RAM.
+    \item 'generateRandomInstructions': A complexidade depende do número de instruções a serem gerados, que é proporcional ao imput ramSize. A complexidade é O(ramSize).
+    \item 'readInstructions': Essa função lê instruções de um arquivo e retorna elas. A complexidade depende do número de instruções no arquivo, que é proporcional ao imput 'n'. A complexidade é O(n).
+\end{enumerate}
+
+\clearpage
+\section{Resultados}
+Por fim, o resultado obtido por meio do projeto é razoável. Encontramos muitos problemas durante a implementação do trabalho, alguns com bons resultados no final e outros nem tanto.\\ 
+
+\clearpage
+\section{Considerações Finais}
+Ao fim do trabalho, adquirimos real conhecimento sobre o funcionamento de um computador, suas funcionalidades e limitações.  
+
+\\A coordenação da simulação de uma máquina em C, onde quem programa ''não atua'' no papel manual é uma experiência desafiadora, que foge dos padrões aos quais somos habituados. Faz-nos perceber a complexidade de programar sem o auxílio de ferramentas, tais como os operadores lógicos da linguagem e afins.
+
+\\Adicionar uma nova cache ao programa, demonstrou-se de difícil implementaçã. Embora o conceito seja relativamente simples e, de certa forma padronizado, o resultado se tornou razoavelmente satisfatório após várias tentativas.
+
+\\A paciência para estudar o código, discutir ideias, e dessa forma entender o proposto também foi essencial para o desenvolvimento do projeto.
+\\O trabalho em questão agrega de diversas formas, pessoais e/ou técnicas.
+\clearpage
+
+\clearpage
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
